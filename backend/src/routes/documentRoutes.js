@@ -14,9 +14,7 @@ function createDocumentRouter(controller, { storageDirectory, maxFileSize }) {
     storage,
     limits: {
       fileSize: maxFileSize,
-      files: 1,
-      fields: 0,
-      parts: 1
+      files: 1
     }
   });
   const router = express.Router();
