@@ -1,7 +1,19 @@
 const crypto = require('node:crypto');
-const fs = require('node:fs/promises');
 const DocumentError = require('./documentError');
 const detectMimeType = require('./detectMimeType');
+const DocumentFileRepository = require('../repositories/documentFileRepository');
+
+function mapStorageError(error, { missingFileCode } = {}) {
+  if (error instanceof DocumentError) {
+    return error;
+  }
+
+  if (error.code === 'ENOENT' && missingFileCode) {
+    return new DocumentError(missingFileCode);
+  }
+
+  return new DocumentError('STORAGE_ERROR');
+}
 
 function toPublicDocument(document) {
   const { id, originalName, size, uploadedAt, owner } = document;
@@ -9,8 +21,9 @@ function toPublicDocument(document) {
 }
 
 class DocumentService {
-  constructor(repository, { allowedMimeTypes }) {
+  constructor(repository, { allowedMimeTypes, fileRepository }) {
     this.repository = repository;
+    this.fileRepository = fileRepository;
     this.allowedMimeTypes = new Set(allowedMimeTypes);
   }
 
@@ -20,7 +33,7 @@ class DocumentService {
     }
 
     try {
-      const contents = await fs.readFile(file.path);
+      const contents = await this.fileRepository.read(file.path);
       const contentType = detectMimeType(contents);
       if (!contentType || !this.allowedMimeTypes.has(contentType)) {
         throw new DocumentError('UNSUPPORTED_MEDIA_TYPE');
@@ -39,12 +52,14 @@ class DocumentService {
       this.repository.save(document);
       return toPublicDocument(document);
     } catch (error) {
-      await fs.unlink(file.path).catch(() => {});
-      if (error instanceof DocumentError) {
-        throw error;
+      let documentError = mapStorageError(error);
+      try {
+        await this.fileRepository.remove(file.path);
+      } catch {
+        documentError = new DocumentError('STORAGE_ERROR');
       }
 
-      throw new DocumentError('STORAGE_ERROR');
+      throw documentError;
     }
   }
 
@@ -61,19 +76,11 @@ class DocumentService {
     }
 
     try {
-      const file = await fs.stat(document.path);
-      if (!file.isFile()) {
+      if (!await this.fileRepository.isFile(document.path)) {
         throw new DocumentError('DOCUMENT_NOT_FOUND');
       }
     } catch (error) {
-      if (error instanceof DocumentError) {
-        throw error;
-      }
-      if (error.code === 'ENOENT') {
-        throw new DocumentError('DOCUMENT_NOT_FOUND');
-      }
-
-      throw new DocumentError('STORAGE_ERROR');
+      throw mapStorageError(error, { missingFileCode: 'DOCUMENT_NOT_FOUND' });
     }
 
     return {

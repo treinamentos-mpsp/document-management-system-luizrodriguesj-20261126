@@ -45,6 +45,14 @@ test('upload, listagem, download e validacoes de documentos', async () => {
     assert.equal(missingFileResponse.status, 400);
     assert.equal((await missingFileResponse.json()).error.code, 'FILE_REQUIRED');
 
+    const malformedJsonResponse = await fetch(`${baseUrl}/upload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{'
+    });
+    assert.equal(malformedJsonResponse.status, 400);
+    assert.equal((await malformedJsonResponse.json()).error.code, 'FILE_REQUIRED');
+
     const invalidTypeResponse = await uploadFile(
       new Blob([new Uint8Array([0, 1, 2])], { type: 'application/pdf' }),
       'invalid.pdf'

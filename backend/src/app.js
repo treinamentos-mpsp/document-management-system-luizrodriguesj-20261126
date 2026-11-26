@@ -13,6 +13,7 @@
 const express = require('express');
 const path = require('node:path');
 const DocumentRepository = require('./repositories/documentRepository');
+const DocumentFileRepository = require('./repositories/documentFileRepository');
 const DocumentService = require('./services/documentService');
 const createDocumentController = require('./controllers/documentController');
 const handleError = require('./controllers/errorController');
@@ -60,10 +61,10 @@ function createApp(options = {}) {
   const maxFileSize = options.maxFileSize || parseMaxFileSize(process.env.MAX_FILE_SIZE_BYTES);
   const allowedMimeTypes = options.allowedMimeTypes || parseAllowedMimeTypes(process.env.ALLOWED_MIME_TYPES);
   const repository = options.repository || new DocumentRepository();
-  const service = new DocumentService(repository, { allowedMimeTypes });
+  const fileRepository = options.fileRepository || new DocumentFileRepository();
+  const service = new DocumentService(repository, { allowedMimeTypes, fileRepository });
   const controller = createDocumentController(service);
 
-  app.use(express.json());
   app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
   });
